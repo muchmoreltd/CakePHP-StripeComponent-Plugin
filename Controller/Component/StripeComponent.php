@@ -119,6 +119,19 @@ class StripeComponent extends Component {
 		}
 	}
 
+
+	public function chargeRetrieve($id){
+		Stripe::setApiKey($this->key);
+		$error = null;
+
+		try {
+			$charge = Stripe_Charge::retrieve($id);
+		}catch(Exception $e){
+			return false;
+		}
+
+		return $charge;
+	}
 /**
  * The charge method prepares data for Stripe_Charge::create and attempts a
  * transaction.
@@ -165,11 +178,13 @@ class StripeComponent extends Component {
 		}
 
 		try {
+			//throw new Stripe_AuthenticationError("bad auth");
 			$charge = Stripe_Charge::create($chargeData);
 
 		} catch(Stripe_CardError $e) {
 			$body = $e->getJsonBody();
 			$err = $body['error'];
+			//CakeLog::error(json_encode($body), 'stripe');
 			CakeLog::error(
 				'Charge::Stripe_CardError: ' . $err['type'] . ': ' . $err['code'] . ': ' . $err['message'],
 				'stripe'
@@ -212,6 +227,88 @@ class StripeComponent extends Component {
 		return $this->_formatResult($charge);
 	}
 
+	public function planRetrieve($id){
+		Stripe::setApiKey($this->key);
+		$error = null;
+
+		try {
+			$plan = Stripe_Plan::retrieve($id);
+		}catch(Exception $e){
+			return false;
+		}
+
+		return $plan;
+	}
+
+	public function planCreate($config=array()){
+		Stripe::setApiKey($this->key);
+		$error = null;
+		$intervals = ['month', 'week', 'day', 'year'];
+
+		if(empty($config)){
+			throw new CakeException('No plan configuration provided.');
+		}
+
+		if(empty($config['id'])) {
+			throw new CakeException('Plan id is required.');
+		}
+		
+		if(empty($config['amount'])) {
+			throw new CakeException('Amount is required and must be numeric.');
+		}
+
+		$config['amount'] *= 100;
+
+		if(empty($config['currency'])) {
+			$config['currency'] = $this->currency;
+		}
+		
+		if(empty($config['name'])) {
+			$config['name'] = $config['id'];
+		}
+
+		if(empty($config['interval']) || !in_array($config['interval'], $intervals)){
+			$config['interval'] = $intervals[0];
+		}
+
+
+		try{
+			$plan = Stripe_Plan::create($config);
+		}catch (Stripe_InvalidRequestError $e) {
+			$body = $e->getJsonBody();
+			$err = $body['error'];
+			CakeLog::error(
+				'Plan::Stripe_InvalidRequestError: ' . $err['type'] . ': ' . $err['message'],
+				'stripe'
+			);
+			$error = $err['message'];
+		}catch (Stripe_AuthenticationError $e) {
+			CakeLog::error('Customer::Stripe_AuthenticationError: API key rejected!', 'stripe');
+			$error = 'Payment processor API key error.';
+
+		} catch (Stripe_ApiConnectionError $e) {
+			CakeLog::error('Customer::Stripe_ApiConnectionError: Stripe could not be reached.', 'stripe');
+			$error = 'Network communication with payment processor failed, try again later';
+
+		} catch (Stripe_Error $e) {
+			CakeLog::error('Customer::Stripe_Error: Stripe could be down.', 'stripe');
+			$error = 'Payment processor error, try again later.';
+
+		} catch (Exception $e) {
+			CakeLog::error('Customer::Exception: Unknown error.', 'stripe');
+			$error = 'There was an error, try again later.';
+		}
+
+		if ($error !== null) {
+			// an error is always a string
+			return (string)$error;
+		}
+
+		CakeLog::info('Plan: plan id ' . $plan->id, 'stripe');
+
+		return $this->_formatResult($plan);
+	}
+
 /**
  * The customerCreate method prepares data for Stripe_Customer::create and attempts to
  * create a customer.
@@ -231,6 +328,7 @@ class StripeComponent extends Component {
 		$error = null;
 
 		try {
+			//throw new Stripe_AuthenticationError("bad auth");
 			$customer = Stripe_Customer::create($data);
 
 		} catch(Stripe_CardError $e) {
@@ -291,12 +389,29 @@ class StripeComponent extends Component {
 
 		try {
 			$customer = Stripe_Customer::retrieve($id);
+			CakeLog::error($id);
 		} catch (Exception $e) {
 			return false;
 		}
 		return $customer;
 	}
 
+	/**
+	 * retreive envent by event id
+	 * $param int $id of an existing event
+	 */ 
+	public function eventRetrieve($id){
+		Stripe::setApiKey($this->key);
+		$event = false;
+
+		try{
+			$event = Stripe_Event::retrieve($id);
+		}catch(Exception $e){
+			return false;
+		}
+
+		return $event;
+	}
 /**
  * Returns an array of fields we want from Stripe's response objects
  *
